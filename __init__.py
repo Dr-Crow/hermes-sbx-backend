@@ -6,6 +6,7 @@ restarted by sbx if it idled out, and re-created if it was removed. Select it wi
 
 Settings (``terminal.sbx`` in config.yaml, each overridable by the env var in brackets):
   agent [HERMES_SBX_AGENT]         sbx agent or kit for ``sbx create`` (default: shell)
+  workspace_mode [HERMES_SBX_WORKSPACE_MODE] mount (default) or clone: the agent works on a private git clone, host repo read-only
   workspace [HERMES_SBX_WORKSPACE] host directory bind-mounted read-write at the same path (default: none, the agent
                                    works in the sandbox's own filesystem)
   cpus / memory / template / pull / kits / static_mcp / command   see README
@@ -38,6 +39,7 @@ _SETTING_ENV = {
     "command": "HERMES_SBX_COMMAND",
     "agent": "HERMES_SBX_AGENT",
     "workspace": "HERMES_SBX_WORKSPACE",
+    "workspace_mode": "HERMES_SBX_WORKSPACE_MODE",
     "template": "HERMES_SBX_TEMPLATE",
     "pull": "HERMES_SBX_PULL",
     "cpus": "HERMES_SBX_CPUS",
@@ -79,10 +81,18 @@ def build_create_args(*, name: str, settings: Dict[str, Any], workspace: Optiona
     pull = str(settings.get("pull") or "missing")
     if pull not in _PULL:
         raise ValueError(f"sbx pull must be one of {sorted(_PULL)}, got {pull!r}")
+    mode = str(settings.get("workspace_mode") or "mount")
+    if mode not in ("mount", "clone"):
+        raise ValueError(f"sbx workspace_mode must be 'mount' or 'clone', got {mode!r}")
+    if mode == "clone" and not workspace:
+        raise ValueError("sbx workspace_mode 'clone' needs terminal.sbx.workspace (a git repository)")
     args = ["create", agent]
     if workspace:
         args.append(workspace)
     args += ["--name", name, "--pull", pull, "--no-progress"]
+    if mode == "clone":
+        # private clone in the VM, host repo read-only; sbx itself rejects a non-git workspace (no silent fallback)
+        args.append("--clone")
     if settings.get("template"):
         args += ["--template", str(settings["template"])]
     if settings.get("cpus"):

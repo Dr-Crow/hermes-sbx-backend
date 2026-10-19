@@ -66,6 +66,16 @@ class CreateArgs(unittest.TestCase):
         with self.assertRaises(ValueError):
             sbx.build_create_args(name="n", settings={"pull": "sometimes"}, workspace=None)
 
+    def test_clone_mode(self):
+        a = sbx.build_create_args(name="n", settings={"workspace_mode": "clone"}, workspace="/repo")
+        self.assertEqual(a[:3], ["create", "shell", "/repo"])
+        self.assertIn("--clone", a)
+        self.assertNotIn("--clone", sbx.build_create_args(name="n", settings={}, workspace="/repo"))
+        with self.assertRaises(ValueError):  # clone without a repo would otherwise silently mean "no files"
+            sbx.build_create_args(name="n", settings={"workspace_mode": "clone"}, workspace=None)
+        with self.assertRaises(ValueError):
+            sbx.build_create_args(name="n", settings={"workspace_mode": "copy"}, workspace="/repo")
+
 
 class Environment(unittest.TestCase):
     def make(self, ws, **kw):
