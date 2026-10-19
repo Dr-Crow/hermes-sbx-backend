@@ -115,6 +115,9 @@ class SbxEnvironment(BaseEnvironment):
         # directory, and guessing a host path to mount would be unsafe.
         workspace = self._settings.get("workspace")
         self._workspace = os.path.abspath(workspace) if workspace else None
+        # Hermes replaces host-looking cwds with a container default such as /root and passes it to execute() on the
+        # first call; /root does not exist for the sandbox user, so that value means "use my tracked cwd".
+        self._requested_cwd = cwd
         # With a bind mount the guest sees the host path; without one the agent lives in the sandbox's own filesystem.
         super().__init__(cwd=self._workspace or "~", timeout=timeout)
 
@@ -155,6 +158,11 @@ class SbxEnvironment(BaseEnvironment):
             return True
 
     # -- BaseEnvironment ---------------------------------------------------------------
+    def execute(self, command: str, cwd: str = "", **kwargs: Any) -> dict:
+        if cwd and cwd == self._requested_cwd:
+            cwd = ""  # fall back to self.cwd: the mounted workspace, or the sandbox home, then wherever `cd` led
+        return super().execute(command, cwd, **kwargs)
+
     def _before_execute(self) -> None:
         if self._ensure_sandbox():
             # The sandbox was removed behind our back: the session snapshot lived inside it.
