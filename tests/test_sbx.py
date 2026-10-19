@@ -223,6 +223,29 @@ class RealSbx(unittest.TestCase):
             env.cleanup()
             env._sbx_run(["rm", "--force", env.name], timeout=60)
 
+    def test_clone_mode_keeps_host_repo_untouched(self):
+        import subprocess, time
+        root = tempfile.mkdtemp(prefix="hsbx-e2e-clone-")
+        ws = os.path.join(root, "repo")
+        os.makedirs(ws)
+        git = lambda *a: subprocess.run(["git", "-C", ws, "-c", "user.name=e2e", "-c", "user.email=e2e@example.com", *a],
+                                        check=True, capture_output=True)
+        git("init", "-q", "-b", "main")
+        Path(ws, "app.txt").write_text("v1\n")
+        git("add", "app.txt")
+        git("commit", "-q", "-m", "init", "--no-verify")
+        env = sbx.SbxEnvironment(cwd="/root", timeout=120, task_id=f"e2e-clone-{os.getpid()}-{int(time.time())}", persistent=False,
+                                 settings={"agent": "shell", "workspace": ws, "workspace_mode": "clone"})
+        try:
+            env.execute(f"cd {ws} && echo evil > app.txt && mkdir -p .git/hooks && printf '#!/bin/sh\\n' > .git/hooks/pre-commit")
+            r = env.execute("touch /run/sandbox/source/x 2>&1 | head -1")
+            self.assertIn("Read-only", r["output"])
+            self.assertEqual(Path(ws, "app.txt").read_text(), "v1\n")
+            self.assertFalse(Path(ws, ".git", "hooks", "pre-commit").exists())
+        finally:
+            env.cleanup()
+            env._sbx_run(["rm", "--force", env.name], timeout=60)
+
 
 if __name__ == "__main__":
     unittest.main()
