@@ -35,6 +35,7 @@ hermes config set terminal.sbx.workspace /path/to/project   # optional host dir,
 | `template` [`HERMES_SBX_TEMPLATE`] | sbx default | image for `--template` |
 | `cpus`, `memory` | sbx default | `--cpus`, `--memory` |
 | `pull` [`HERMES_SBX_PULL`] | `missing` | `always`, `missing` or `never` |
+| `workspace_mode` | `mount` | `clone`: the agent works on a private git clone inside the VM, the host repo is read-only, fetch results with `git fetch sandbox-<name>` |
 | `kits`, `static_mcp` | none | lists passed to `--kit` and `--static-mcp` |
 | `command` [`HERMES_SBX_COMMAND`] | `sbx` | path of the sbx binary |
 
