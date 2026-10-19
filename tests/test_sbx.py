@@ -76,7 +76,7 @@ class Environment(unittest.TestCase):
 
     def test_create_once_and_execute(self):
         ws = tempfile.mkdtemp(prefix="ws-")
-        d, env = self.make(ws)
+        d, env = self.make("/root", settings={"workspace": ws})
         r = env.execute("echo hi && pwd")
         self.assertEqual(r["returncode"], 0, r)
         self.assertIn("hi", r["output"])
@@ -89,20 +89,20 @@ class Environment(unittest.TestCase):
     def test_cwd_and_env_persist_between_calls(self):
         ws = tempfile.mkdtemp(prefix="ws-")
         os.makedirs(os.path.join(ws, "sub"))
-        d, env = self.make(ws)
+        d, env = self.make("/root", settings={"workspace": ws})
         env.execute("cd sub && export FOO=bar")
         r = env.execute("pwd; echo $FOO")
         self.assertIn("sub", r["output"])
         self.assertIn("bar", r["output"])
 
-    def test_nonexistent_cwd_is_mountless(self):
-        d, env = self.make("~")
+    def test_no_workspace_setting_is_mountless_even_if_cwd_exists(self):
+        d, env = self.make("/root")
         self.assertIsNone(env._workspace)
         self.assertTrue(any(l.startswith(f"create shell --name {env.name}") for l in log(d)))
 
     def test_recreated_after_removal_flags_notice(self):
         ws = tempfile.mkdtemp(prefix="ws-")
-        d, env = self.make(ws)
+        d, env = self.make("/root", settings={"workspace": ws})
         env.execute("true")
         (d / "names").write_text("")
         env._verified_at = 0.0  # TTL elapsed
@@ -113,17 +113,17 @@ class Environment(unittest.TestCase):
 
     def test_stdin_uses_dash_i(self):
         ws = tempfile.mkdtemp(prefix="ws-")
-        d, env = self.make(ws)
+        d, env = self.make("/root", settings={"workspace": ws})
         r = env.execute("cat", stdin_data="piped-in")
         self.assertIn("piped-in", r["output"])
         self.assertTrue(any(l.startswith("exec -i ") for l in log(d)))
 
     def test_cleanup_persistent_vs_ephemeral(self):
         ws = tempfile.mkdtemp(prefix="ws-")
-        d, env = self.make(ws, persistent=True)
+        d, env = self.make("/root", settings={"workspace": ws}, persistent=True)
         env.cleanup()
         self.assertFalse(any(l.startswith("rm ") for l in log(d)))
-        d2, env2 = self.make(ws, persistent=False)
+        d2, env2 = self.make("/root", settings={"workspace": ws}, persistent=False)
         env2.cleanup()
         self.assertTrue(any(l == f"rm --force {env2.name}" for l in log(d2)))
 
@@ -176,8 +176,8 @@ class RealSbx(unittest.TestCase):
         os.makedirs(ws)
         Path(ws, "seed.txt").write_text("seed-from-host\n")
         t0 = time.time()
-        env = sbx.SbxEnvironment(cwd=ws, timeout=120, task_id=f"e2e-{os.getpid()}-{int(t0)}", persistent=False,
-                                 settings={"agent": "shell"})
+        env = sbx.SbxEnvironment(cwd="/root", timeout=120, task_id=f"e2e-{os.getpid()}-{int(t0)}", persistent=False,
+                                 settings={"agent": "shell", "workspace": ws})
         try:
             print(f"\ncreate+init_session: {time.time() - t0:.1f}s")
             r = env.execute("pwd && cat seed.txt && uname -r && docker info --format 'docker {{.ServerVersion}}'")

@@ -6,8 +6,8 @@ restarted by sbx if it idled out, and re-created if it was removed. Select it wi
 
 Settings (``terminal.sbx`` in config.yaml, each overridable by the env var in brackets):
   agent [HERMES_SBX_AGENT]         sbx agent or kit for ``sbx create`` (default: shell)
-  workspace [HERMES_SBX_WORKSPACE] host directory bind-mounted at the same path (default: the terminal cwd if it is an
-                                   existing absolute host directory, else none: the agent works in the sandbox's own filesystem)
+  workspace [HERMES_SBX_WORKSPACE] host directory bind-mounted read-write at the same path (default: none, the agent
+                                   works in the sandbox's own filesystem)
   cpus / memory / template / pull / kits / static_mcp / command   see README
 No credential is forwarded into the sandbox; sbx injects provider credentials on the host side.
 """
@@ -111,9 +111,9 @@ class SbxEnvironment(BaseEnvironment):
         self._lock = threading.Lock()
         self._verified_at = 0.0
 
+        # Explicit opt-in only: Hermes hands plugin backends a container-style cwd (e.g. /root), never the host
+        # directory, and guessing a host path to mount would be unsafe.
         workspace = self._settings.get("workspace")
-        if not workspace and cwd and os.path.isabs(cwd) and os.path.isdir(cwd):
-            workspace = cwd
         self._workspace = os.path.abspath(workspace) if workspace else None
         # With a bind mount the guest sees the host path; without one the agent lives in the sandbox's own filesystem.
         super().__init__(cwd=self._workspace or "~", timeout=timeout)
