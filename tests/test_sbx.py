@@ -111,6 +111,15 @@ class Environment(unittest.TestCase):
         self.assertEqual(len([l for l in log(d) if l.startswith("create ")]), 2)
         self.assertTrue(r.get("environment_recreated"), r)
 
+    def test_container_default_cwd_maps_to_workspace(self):
+        ws = tempfile.mkdtemp(prefix="ws-")
+        d, env = self.make("/root", settings={"workspace": ws})
+        r = env.execute("pwd", cwd="/root")  # what Hermes passes on the first call
+        self.assertEqual(r["returncode"], 0, r)
+        self.assertIn(os.path.realpath(ws), r["output"])
+        r = env.execute("pwd", cwd="/tmp")  # an explicit, different cwd is honoured
+        self.assertIn("/tmp", r["output"])
+
     def test_stdin_uses_dash_i(self):
         ws = tempfile.mkdtemp(prefix="ws-")
         d, env = self.make("/root", settings={"workspace": ws})
