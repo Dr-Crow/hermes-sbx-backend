@@ -100,8 +100,6 @@ def build_create_args(*, name: str, settings: Dict[str, Any], workspace: Optiona
 class SbxEnvironment(BaseEnvironment):
     """One sbx sandbox per Hermes task; spawn-per-call ``sbx exec`` (like the Docker and Singularity backends)."""
 
-    _sudo_nopasswd_probe_supported = True
-
     def __init__(self, cwd: str, timeout: int, task_id: str = "default", persistent: bool = True,
                  settings: Optional[Dict[str, Any]] = None):
         self._settings = dict(settings if settings is not None else _load_settings())
