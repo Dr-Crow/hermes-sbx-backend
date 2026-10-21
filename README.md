@@ -37,7 +37,7 @@ hermes config set terminal.sbx.workspace /path/to/project   # optional host dir,
 | prerequisite | `sbx login` | `sbx login` and `sbx setup ssh` once (adds the generated `Host *.sbx` block to `~/.ssh/config`; no key, no sshd, no port) |
 | warm command | about 0.4 s | about 0.25 to 0.4 s (Hermes' poll interval dominates both) |
 | skills, credential files, cache files in the sandbox's `~/.hermes` | not synced | pushed by Hermes' file sync (`sync_files`) |
-| `terminal.env_passthrough` | not forwarded | forwarded with `SendEnv`; sbx's SSH endpoint did not pass it through in our test |
+| `terminal.env_passthrough` | not forwarded | not forwarded either: the sbx SSH endpoint drops `SendEnv` and `SetEnv` (checked with plain `ssh`) |
 
 SSH-only settings: `ssh_user` [`HERMES_SBX_SSH_USER`] (default `_default_user_`, the placeholder the generated block uses for
 the sandbox's own user; `agent` and `root` also work), `sync_files` (default `true`), `sync_back` (default `false`: Hermes'
@@ -66,7 +66,7 @@ host's skills directory; here that is opt-in).
 - The `ssh` transport subclasses Hermes' `tools.environments.ssh.SSHEnvironment` (`hermes plugins validate` lists it, like
   the other core imports, under "private core imports"). It overrides `_build_ssh_command` and `_before_execute` and re-runs
   `SSHEnvironment.__init__` to re-attach, so a refactor of that class can break it.
-- A command that exceeds Hermes' poll granularity is not faster over ssh; the saving is the per-call process start of `sbx exec`.
+- Warm-command latency is dominated by Hermes' own poll interval, so `exec` and `ssh` are indistinguishable per command; the transports differ in file sync and failure behaviour, not speed.
 
 ## Tests
 

@@ -364,9 +364,13 @@ def _():
         out["external_recreate"] = sbx("create", "--name", name, "shell", WS, "--no-progress", timeout=300)[1][-80:]
         out["call_after_external_recreate(stale mux master)"] = short(T("echo hi; hostname"), 300)
         e = env_obj()
-        ex = subprocess.run(["ssh", "-o", f"ControlPath={e.control_socket}", "-O", "exit", f"{e.user}@{e.host}"],
-                            capture_output=True, text=True)
-        out["ssh_O_exit"] = (ex.stdout + ex.stderr).strip()[:100]
+        socks = sorted(Path(tempfile.gettempdir(), "hermes-ssh").glob("*.sock"))  # Hermes keeps more than one master
+        res = []
+        for sock in socks:
+            ex = subprocess.run(["ssh", "-o", f"ControlPath={sock}", "-O", "exit", f"{e.user}@{e.host}"],
+                                capture_output=True, text=True)
+            res.append((ex.stdout + ex.stderr).strip()[:60])
+        out["ssh_O_exit_all_masters"] = res
         out["call_after_mux_exit"] = short(T("echo hi; hostname; cat seed.txt"), 300)
     return out
 
