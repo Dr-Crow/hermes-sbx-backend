@@ -68,6 +68,7 @@ terminal = {
     "web:\n  keyless_fallback: false\n  keyless_rescue: false\n"
     "security:\n  allow_lazy_installs: false\nupdates:\n  check: false\n  pre_update_backup: 'off'\n"
     "telemetry:\n  shared_metrics:\n    enabled: false\n    send: false\n"
+    "model_catalog:\n  enabled: false\nmodels_dev:\n  url: http://127.0.0.1:9/api.json\n"   # no catalog fetches (see results doc)
     f"terminal:\n  env_passthrough: [BENCH_PASSTHROUGH]\n{terminal}"
     "plugins:\n  enabled:\n    - sbx\n  disabled: []\n")
 os.environ["HERMES_HOME"] = str(HOME)
