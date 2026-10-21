@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 VERIFY_TTL_S = 10.0
 CREATE_TIMEOUT_S = 300
 # The task id Hermes' system-prompt builder uses for its one-off "what OS is this backend" environment.
+# What Hermes substitutes for a cwd it cannot use inside a container (see _init_sandbox).
+HERMES_DEFAULT_CWDS = ("/root", "~")
 PROMPT_PROBE_TASK_ID = "prompt-backend-probe"
 TRANSPORTS = ("exec", "ssh")
 
@@ -136,12 +138,15 @@ class SbxSandbox:
         workspace = self._settings.get("workspace")
         self._workspace = os.path.abspath(workspace) if workspace else None
         self.name = sandbox_name(task_id, self._workspace)
-        # Hermes replaces host-looking cwds with a container default such as /root and passes it to execute() on the
-        # first call; /root does not exist for the sandbox user, so that value means "use my tracked cwd".
+        # Hermes treats this backend as a container: it replaces every host-looking cwd (anything under /home, /Users
+        # and so on, which includes a workspace mounted at its host path) with its container default, /root, in the
+        # per-command cwd. It also builds a new environment (idle cleanup, session end) with whatever cwd the session
+        # last recorded, so the cwd it passes to execute() is not always the one the environment was created with.
+        # None of these values is a directory the agent chose: they all mean "use my tracked cwd".
         self._requested_cwd = cwd
 
     def _map_cwd(self, cwd: str) -> str:
-        return "" if cwd and cwd == self._requested_cwd else cwd
+        return "" if not cwd or cwd == self._requested_cwd or cwd in HERMES_DEFAULT_CWDS else cwd
 
     def _sbx_run(self, args: List[str], timeout: float) -> subprocess.CompletedProcess:
         return run_capture([self._sbx, *args], timeout=timeout)
