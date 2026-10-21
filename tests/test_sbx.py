@@ -149,6 +149,12 @@ class Environment(unittest.TestCase):
         env2.cleanup()
         self.assertTrue(any(l == f"rm --force {env2.name}" for l in log(d2)))
 
+    def test_cleanup_force_remove_removes_even_a_persistent_sandbox(self):
+        ws = tempfile.mkdtemp(prefix="ws-")
+        d, env = self.make("/root", settings={"workspace": ws}, persistent=True)
+        env.cleanup(force_remove=True)  # what Hermes passes when it tears down a probe environment
+        self.assertTrue(any(l == f"rm --force {env.name}" for l in log(d)))
+
     def test_missing_binary(self):
         with self.assertRaises(RuntimeError):
             sbx.SbxEnvironment(cwd="~", timeout=5, settings={"command": "/nonexistent/sbx"})
@@ -177,6 +183,19 @@ class Provider(unittest.TestCase):
         got = []
         sbx.register(type("Ctx", (), {"register_terminal_environment_provider": lambda self, pr: got.append(pr)})())
         self.assertEqual(len(got), 1)
+
+    def test_prompt_probe_gets_a_stub_and_no_sandbox(self):
+        d, b = fake_sbx()
+        os.environ["HERMES_SBX_COMMAND"] = b
+        try:
+            env = sbx.SbxProvider().create_environment(cwd="/root", timeout=5, task_id="prompt-backend-probe")
+            r = env.execute("uname -s")
+            self.assertEqual(r["returncode"], 0)
+            self.assertIn("os=Linux", r["output"])
+            env.cleanup(force_remove=True)
+            self.assertEqual(log(d), [], "the probe must not talk to sbx at all")
+        finally:
+            del os.environ["HERMES_SBX_COMMAND"]
 
     def test_probe(self):
         d, b = fake_sbx()
