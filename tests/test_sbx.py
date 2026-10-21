@@ -9,6 +9,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -189,7 +190,12 @@ class Provider(unittest.TestCase):
     def test_flags_and_registration(self):
         p = sbx.SbxProvider()
         self.assertEqual(p.name, "sbx")
-        self.assertTrue(p.is_remote and p.is_container and p.session_isolated_when_nonpersistent)
+        self.assertTrue(p.is_remote and p.session_isolated_when_nonpersistent)
+        os.environ.pop("HERMES_SBX_WORKSPACE", None)
+        with mock.patch.object(sbx, "_load_settings", return_value={}):
+            self.assertTrue(p.is_container)  # closed sandbox: Hermes' container defaults apply
+        with mock.patch.object(sbx, "_load_settings", return_value={"workspace": "/home/x/ws"}):
+            self.assertFalse(p.is_container)  # host path bind-mounted at the same path: it is not a closed container
         os.environ.pop("HERMES_SBX_SKIP_APPROVALS", None)
         self.assertFalse(p.skip_container_guards)
         os.environ["HERMES_SBX_SKIP_APPROVALS"] = "1"

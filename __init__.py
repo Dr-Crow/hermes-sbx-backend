@@ -80,7 +80,15 @@ class SbxProvider(TerminalEnvironmentProvider):
     name = "sbx"
     display_name = "Docker Sandboxes (sbx)"
     is_remote = True
-    is_container = True
+
+    @property
+    def is_container(self) -> bool:
+        # Hermes assumes a container cannot see host paths: it discards a host-looking terminal.cwd (anything under
+        # /home, /Users, ...) for /root and resolves relative file-tool paths against /root, which the sandbox user
+        # cannot write. With a workspace bind-mounted at its host path that assumption is false, so the backend
+        # presents as a plain remote machine and terminal.cwd may be the workspace. Without a workspace the sandbox
+        # is a closed container and the default applies.
+        return not _load_settings().get("workspace")
     # A sandbox is resumed by name, so two ephemeral sessions must not share one.
     session_isolated_when_nonpersistent = True
 

@@ -32,6 +32,7 @@ ap.add_argument("--workspace", required=True)
 ap.add_argument("--home")
 ap.add_argument("--sandbox", help="B: existing sandbox name. A/C: ignored (the plugin names it)")
 ap.add_argument("--ssh-user", default="agent", help="B: user for <name>.sbx (sbx accepts agent, root, _default_user_)")
+ap.add_argument("--terminal-cwd-ws", action="store_true", help="A/C: set terminal.cwd to the workspace instead of /root")
 ap.add_argument("--n", type=int, default=15, help="commands for the latency sample")
 ap.add_argument("--only", default="", help="comma list of step-number prefixes to run, e.g. 0_,1_,2_")
 ap.add_argument("--skip", default="", help="comma list of steps to skip: approvals,recreate,stopped,sync,failures")
@@ -55,9 +56,10 @@ shutil.rmtree(HOME, ignore_errors=True)
 (HOME / "plugins" / "sbx").symlink_to(ROOT)
 (HOME / "skills" / "bench-skill").mkdir(parents=True)
 (HOME / "skills" / "bench-skill" / "SKILL.md").write_text("---\nname: bench-skill\ndescription: x\n---\nhello from host skills\n")
+TCWD = WS if args.terminal_cwd_ws else "/root"
 terminal = {
-    "A": f"  backend: sbx\n  cwd: /root\n  sbx:\n    workspace: {WS}\n    transport: exec\n",
-    "C": f"  backend: sbx\n  cwd: /root\n  sbx:\n    workspace: {WS}\n    transport: ssh\n",
+    "A": f"  backend: sbx\n  cwd: {TCWD}\n  sbx:\n    workspace: {WS}\n    transport: exec\n",
+    "C": f"  backend: sbx\n  cwd: {TCWD}\n  sbx:\n    workspace: {WS}\n    transport: ssh\n",
     "B": f"  backend: ssh\n  ssh_host: {args.sandbox}.sbx\n  ssh_user: {args.ssh_user}\n  cwd: {WS}\n",
 }[SC]
 (HOME / "config.yaml").write_text(
