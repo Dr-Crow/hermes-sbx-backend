@@ -14,13 +14,18 @@ sbx login                                   # once
 hermes plugins install <owner>/hermes-sbx-backend --enable
 hermes config set terminal.backend sbx
 hermes config set terminal.sbx.workspace /path/to/project   # optional host dir, mounted read-write at the same path
+hermes config set terminal.cwd /path/to/project             # same path: relative file-tool paths then land in the workspace
 ```
 
 ## Behaviour
 
-- One sandbox per Hermes task id, named `hermes-<task>-<hash>`, created on first use (`sbx create shell ...`, ~4 s cold,
-  ~0.25 s per command warm), resumed by sbx if it idled out, re-created (with Hermes' `environment_recreated` notice) if removed.
+- One sandbox per Hermes task id, named `hermes-<task>-<hash>`, created on first use (`sbx create shell ...`, 28 to 32 s cold in a
+  nested VM, 0.25 to 0.4 s per command warm), resumed by sbx if it idled out, re-created (with Hermes' `environment_recreated` notice) if removed.
 - `terminal.container_persistent: false` removes the sandbox on cleanup; `true` leaves it for the next session.
+- With a workspace the backend tells Hermes it is not a closed container (`is_container` is false), because Hermes would
+  otherwise replace a host-looking `terminal.cwd` such as `/home/me/proj` with `/root` and resolve relative file-tool paths
+  there (permission denied for the sandbox user). Set `terminal.cwd` to the workspace path. Without a workspace the Hermes
+  container defaults apply unchanged.
 - Shell state (cwd, exported variables) persists between calls through Hermes' normal session snapshot.
 - No credential is forwarded into the sandbox. Provider credentials stay on the host and are injected by sbx's proxy.
 - Dangerous-command approval stays ON by default because a mounted workspace is real host data. Opt out with
