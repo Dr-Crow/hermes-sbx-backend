@@ -117,6 +117,10 @@ def step(name):
         except Exception as exc:  # a failing step is a result, not a crash
             REPORT["steps"][name] = {"EXCEPTION": f"{type(exc).__name__}: {exc}", "tb": traceback.format_exc()[-1500:]}
             log("   EXCEPTION", exc)
+        try:
+            REPORT["steps"][name]["_env_cwd_after"] = getattr(env_obj(), "cwd", None)
+        except Exception:
+            pass
         REPORT["steps"][name]["_wall_s"] = round(time.time() - t0, 2) if isinstance(REPORT["steps"][name], dict) else None
         return fn
     return deco
@@ -334,18 +338,22 @@ def _():
             "host_skill_file_changed_by_guest": before != after,
             "host_got_guest_created_skill": (HOME / "skills" / "from-guest" / "SKILL.md").exists(),
             "sbx_ls_after_cleanup": sbx("ls")[1][-300:],
-            "reattach_first_call": short(T("echo reattached; pwd"), 200)}
+            "reattach_first_call": short(T("echo reattached; pwd"), 200),
+            "env_cwd_after_reattach": env_obj().cwd}
 
 
 @step("12_recreate_after_sbx_rm")
 def _():
     name = sandbox_name()
     out = {"sandbox": name}
-    T("echo warm")  # refresh the plugin's 10 s verify window
+    r0 = T("echo warm")  # refresh the plugin's 10 s verify window
+    out["warm_call"] = short(r0, 200)
+    out["env_cwd_before_rm"] = env_obj().cwd
     rc, msg = sbx("rm", "--force", name)
     out["sbx_rm"] = [rc, msg[:120]]
     r = T(f"echo immediately-after-rm; cat {WS}/seed.txt")          # inside the verify TTL
     out["inside_ttl"] = short(r, 400)
+    out["env_cwd_after_inside_ttl"] = env_obj().cwd
     time.sleep(11)
     r = T(f"echo after-ttl; cat {WS}/seed.txt")
     out["after_ttl"] = short(r, 400)

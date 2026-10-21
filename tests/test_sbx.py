@@ -140,6 +140,16 @@ class Environment(unittest.TestCase):
         r = env.execute("pwd", cwd="/tmp")  # an explicit, different cwd is honoured
         self.assertIn("/tmp", r["output"])
 
+    def test_default_cwd_still_maps_when_env_was_created_with_a_recorded_cwd(self):
+        # Hermes builds a new environment with the cwd the session last recorded (here /tmp), then keeps passing its
+        # container default (/root) per command: that must not turn into `cd /root` (exit 126).
+        ws = tempfile.mkdtemp(prefix="ws-")
+        d, env = self.make("/tmp", settings={"workspace": ws})
+        for given in ("/root", "~", "/tmp", ""):
+            r = env.execute("pwd", cwd=given)
+            self.assertEqual(r["returncode"], 0, (given, r))
+            self.assertIn(os.path.realpath(ws), r["output"], given)
+
     def test_stdin_uses_dash_i(self):
         ws = tempfile.mkdtemp(prefix="ws-")
         d, env = self.make("/root", settings={"workspace": ws})

@@ -26,6 +26,24 @@ hermes config set terminal.sbx.workspace /path/to/project   # optional host dir,
 - Dangerous-command approval stays ON by default because a mounted workspace is real host data. Opt out with
   `terminal.sbx.skip_approvals: true` or `HERMES_SBX_SKIP_APPROVALS=1`.
 
+## Transports
+
+`terminal.sbx.transport` [`HERMES_SBX_TRANSPORT`] picks how commands reach the sandbox. The lifecycle (`sbx create`,
+`sbx ls`, `sbx rm`), the workspace mount, the naming and the approvals are identical.
+
+| | `exec` (default) | `ssh` |
+|---|---|---|
+| command path | `sbx exec <name> bash -c ...` | `ssh <name>.sbx bash -c ...`, Hermes' own `SSHEnvironment` (ControlMaster, `env_passthrough`, `~/.hermes` file sync) |
+| prerequisite | `sbx login` | `sbx login` and `sbx setup ssh` once (adds the generated `Host *.sbx` block to `~/.ssh/config`; no key, no sshd, no port) |
+| warm command | about 0.4 s | about 0.25 to 0.4 s (Hermes' poll interval dominates both) |
+| skills, credential files, cache files in the sandbox's `~/.hermes` | not synced | pushed by Hermes' file sync (`sync_files`) |
+| `terminal.env_passthrough` | not forwarded | forwarded with `SendEnv`; sbx's SSH endpoint did not pass it through in our test |
+
+SSH-only settings: `ssh_user` [`HERMES_SBX_SSH_USER`] (default `_default_user_`, the placeholder the generated block uses for
+the sandbox's own user; `agent` and `root` also work), `sync_files` (default `true`), `sync_back` (default `false`: Hermes'
+`ssh` backend pulls the sandbox's `~/.hermes` back into the host's on cleanup, which lets a sandbox plant files in the
+host's skills directory; here that is opt-in).
+
 ## Settings (`terminal.sbx.*` in config.yaml; env override in brackets)
 
 | key | default | meaning |
@@ -44,11 +62,17 @@ hermes config set terminal.sbx.workspace /path/to/project   # optional host dir,
 - Covers Hermes' own tools. Harnesses Hermes launches over ACP (Claude Code, Codex, ...) run wherever that harness runs.
 - The passwordless-sudo probe is not enabled (the backend does not declare `_sudo_nopasswd_probe_supported`).
 - `sbx` is Docker's proprietary CLI and needs `sbx login`; the plugin shells out to it and does not bundle it.
-- Tested against Hermes v0.21.6 and sbx v0.48.0.
+- Tested against Hermes v0.21.6 and sbx v0.48.0 (exec), and Hermes v0.22.0 (`e06df9c2`) and sbx v0.49.1 (exec and ssh).
+- The `ssh` transport subclasses Hermes' `tools.environments.ssh.SSHEnvironment` (`hermes plugins validate` lists it, like
+  the other core imports, under "private core imports"). It overrides `_build_ssh_command` and `_before_execute` and re-runs
+  `SSHEnvironment.__init__` to re-attach, so a refactor of that class can break it.
+- A command that exceeds Hermes' poll granularity is not faster over ssh; the saving is the per-call process start of `sbx exec`.
 
 ## Tests
 
 ```sh
-PYTHONPATH=<hermes-agent> <hermes-python> -m unittest discover -s tests -v   # fake sbx, no Docker needed
-SBX_E2E=1 PYTHONPATH=<hermes-agent> <hermes-python> -m unittest discover -s tests -v   # real sbx
+PYTHONPATH=<hermes-agent> <hermes-python> -m unittest discover -s tests -v   # fake sbx and fake ssh, no Docker needed
+SBX_E2E=1 PYTHONPATH=<hermes-agent> <hermes-python> -m unittest discover -s tests -v   # real sbx (exec transport)
+SBX_E2E=1 SBX_E2E_SSH=1 PYTHONPATH=<hermes-agent> <hermes-python> -m unittest discover -s tests -v   # also the ssh transport (needs `sbx setup ssh`)
+PYTHONPATH=<hermes-agent> <hermes-python> bench/abc_bench.py A|B|C --workspace DIR [--sandbox NAME]   # A/B/C comparison, see bench/
 ```
