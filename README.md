@@ -11,7 +11,7 @@ It is a pure plugin (`kind: backend`, one Python file, no dependencies, no Herme
 
 ```sh
 sbx login                                   # once
-hermes plugins install <owner>/hermes-sbx-backend --enable
+hermes plugins install Dr-Crow/hermes-sbx-backend --enable
 hermes config set terminal.backend sbx
 hermes config set terminal.sbx.workspace /path/to/project   # optional host dir, mounted read-write at the same path
 hermes config set terminal.cwd /path/to/project             # same path: relative file-tool paths then land in the workspace
