@@ -178,3 +178,20 @@ class SbxSandbox:
             self._sbx_run(["rm", "--force", self.name], timeout=60)
         except Exception as exc:
             logger.warning("sbx rm %s failed: %s", self.name, exc)
+
+
+class PromptProbeEnvironment:
+    """Answers Hermes' prompt-time "what OS is this backend?" probe without creating a sandbox.
+
+    Hermes builds a throwaway environment (task id ``prompt-backend-probe``) once per profile to run ``uname`` and
+    does not tell plugin backends it is only a probe. Answering with a real sandbox would boot a second microVM
+    (about 30 s) that, for a persistent backend, nobody removes. An sbx sandbox is always Linux, so this is exact.
+    """
+
+    cwd = "~"
+
+    def execute(self, command: str, cwd: str = "", **kwargs: Any) -> dict:
+        return {"output": "os=Linux\nkernel=unknown\n", "returncode": 0}
+
+    def cleanup(self, force_remove: Optional[bool] = None) -> None:
+        return None

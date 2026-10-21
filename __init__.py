@@ -26,7 +26,7 @@ from tools.environments.base_output import _popen_bash
 from tools.environments.remote_common import bash_argv
 
 from ._common import (  # noqa: F401  (re-exported: the tests and users import them from the plugin module)
-    CREATE_TIMEOUT_S, VERIFY_TTL_S, SbxSandbox, _load_settings, build_create_args, find_sbx, sandbox_name)
+    CREATE_TIMEOUT_S, PROMPT_PROBE_TASK_ID, VERIFY_TTL_S, PromptProbeEnvironment, SbxSandbox, _load_settings, build_create_args, find_sbx, sandbox_name)
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +62,8 @@ class SbxEnvironment(SbxSandbox, BaseEnvironment):
         cmd += [self.name, *bash_argv(cmd_string, login)]
         return _popen_bash(cmd, stdin_data)
 
-    def cleanup(self) -> None:
-        if self._persistent:
+    def cleanup(self, force_remove: bool = False) -> None:
+        if self._persistent and not force_remove:
             return  # sbx stops idle sandboxes itself; the next session with this task id resumes it
         self._remove_sandbox()
 
@@ -107,6 +107,8 @@ class SbxProvider(TerminalEnvironmentProvider):
 
     def create_environment(self, *, cwd: str, timeout: int, task_id: str = "default", image: Optional[str] = None,
                            container_config: Optional[Dict[str, Any]] = None, **kwargs: Any):
+        if task_id == PROMPT_PROBE_TASK_ID:
+            return PromptProbeEnvironment()
         persistent = bool((container_config or {}).get("container_persistent", True))
         return SbxEnvironment(cwd=cwd, timeout=timeout, task_id=task_id, persistent=persistent)
 
