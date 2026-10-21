@@ -55,6 +55,13 @@ class Naming(unittest.TestCase):
         self.assertRegex(sbx.sandbox_name(""), r"^hermes-default-[0-9a-f]{8}$")
         self.assertLess(len(sbx.sandbox_name("x" * 500)), 60)
 
+    def test_same_task_different_workspace_gets_a_different_sandbox(self):
+        a = sbx.sandbox_name("default", "/work/a")
+        self.assertNotEqual(a, sbx.sandbox_name("default", "/work/b"))
+        self.assertNotEqual(a, sbx.sandbox_name("default"))
+        self.assertEqual(a, sbx.sandbox_name("default", "/work/a"))
+        self.assertRegex(a, r"^hermes-default-[0-9a-f]{8}$")
+
 
 class CreateArgs(unittest.TestCase):
     def test_defaults_and_extras(self):
