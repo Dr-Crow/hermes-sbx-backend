@@ -26,7 +26,8 @@ from tools.environments.base_output import _popen_bash
 from tools.environments.remote_common import bash_argv
 
 from ._common import (  # noqa: F401  (re-exported: the tests and users import them from the plugin module)
-    CREATE_TIMEOUT_S, PROMPT_PROBE_TASK_ID, VERIFY_TTL_S, PromptProbeEnvironment, SbxSandbox, _load_settings, build_create_args, find_sbx, sandbox_name)
+    CREATE_TIMEOUT_S, PROMPT_PROBE_TASK_ID, VERIFY_TTL_S, PromptProbeEnvironment, SbxSandbox, _load_settings,
+    build_create_args, find_sbx, sandbox_name, transport_of, truthy)
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,13 @@ class SbxEnvironment(SbxSandbox, BaseEnvironment):
         self._remove_sandbox()
 
 
+def transport_of_safe() -> str:
+    try:
+        return transport_of(_load_settings())
+    except ValueError:
+        return "exec"
+
+
 class SbxProvider(TerminalEnvironmentProvider):
     name = "sbx"
     display_name = "Docker Sandboxes (sbx)"
@@ -90,19 +98,59 @@ class SbxProvider(TerminalEnvironmentProvider):
         return bool(_load_settings().get("skip_approvals", False))
 
     @property
+    def cache_path_base(self) -> Optional[str]:
+        # The ssh transport syncs ~/.hermes/{skills,credentials,cache} into the sandbox, like Hermes' ssh backend;
+        # with the exec transport nothing is synced and host cache paths do not exist inside.
+        settings = _load_settings()
+        if transport_of(settings) == "ssh" and truthy(settings.get("sync_files", True)):
+            return "~/.hermes"
+        return None
+
+    @property
     def env_description(self) -> str:
         return "a Docker Sandboxes (sbx) microVM (Linux)"
 
     def is_available(self) -> bool:
         return find_sbx(_load_settings().get("command")) is not None
 
+    def _ssh_problem(self) -> Optional[str]:
+        """Why the ssh transport cannot work right now (None: fine or not selected). One local ``ssh -G``, no network."""
+        try:
+            if transport_of(_load_settings()) != "ssh":
+                return None
+        except ValueError as exc:
+            return str(exc)
+        from .ssh_env import ssh_integration_error  # lazy: the exec transport must not depend on Hermes' SSH module
+
+        return ssh_integration_error()
+
+    def check_requirements(self, config: Dict[str, Any]) -> bool:
+        if not self.is_available():
+            logger.error("sbx backend selected but the sbx CLI was not found on PATH")
+            return False
+        problem = self._ssh_problem()
+        if problem:
+            logger.error("sbx backend (transport ssh): %s", problem)
+        return problem is None
+
     def probe(self) -> Tuple[str, str]:
-        return ("ready", "") if self.is_available() else ("needs_setup", "Install the sbx CLI and run `sbx login`.")
+        if not self.is_available():
+            return ("needs_setup", "Install the sbx CLI and run `sbx login`.")
+        problem = self._ssh_problem()
+        return ("needs_setup", problem) if problem else ("ready", "")
+
+    def doctor_checks(self) -> List[Tuple[bool, str, str]]:
+        rows = [(self.is_available(), self.display_name + " backend", "sbx CLI on PATH")]
+        problem = self._ssh_problem()
+        if problem or transport_of_safe() == "ssh":
+            rows.append((problem is None, "sbx SSH integration", problem or "ssh <name>.sbx routed through sbx"))
+        return rows
 
     def setup_instructions(self) -> List[str]:
         return [
             "Install sbx: https://docs.docker.com/ai/sandboxes/install/ then run `sbx login`.",
             "Optional: set terminal.sbx.workspace (host directory mounted at the same path in the sandbox).",
+            "Optional: terminal.sbx.transport: ssh runs commands over SSH instead of `sbx exec`; run `sbx setup ssh` once.",
         ]
 
     def create_environment(self, *, cwd: str, timeout: int, task_id: str = "default", image: Optional[str] = None,
@@ -110,7 +158,13 @@ class SbxProvider(TerminalEnvironmentProvider):
         if task_id == PROMPT_PROBE_TASK_ID:
             return PromptProbeEnvironment()
         persistent = bool((container_config or {}).get("container_persistent", True))
-        return SbxEnvironment(cwd=cwd, timeout=timeout, task_id=task_id, persistent=persistent)
+        settings = _load_settings()
+        if transport_of(settings) == "ssh":
+            from .ssh_env import SbxSshEnvironment  # lazy, see _ssh_problem
+
+            return SbxSshEnvironment(cwd=cwd, timeout=timeout, task_id=task_id, persistent=persistent,
+                                     settings=settings)
+        return SbxEnvironment(cwd=cwd, timeout=timeout, task_id=task_id, persistent=persistent, settings=settings)
 
 
 def register(ctx) -> None:
