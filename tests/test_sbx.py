@@ -12,8 +12,11 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-spec = importlib.util.spec_from_file_location("hermes_sbx_plugin", ROOT / "__init__.py")
+# Same as Hermes' plugin loader: a package, so the plugin's relative imports (._common, .ssh_env) resolve.
+spec = importlib.util.spec_from_file_location("hermes_sbx_plugin", ROOT / "__init__.py",
+                                              submodule_search_locations=[str(ROOT)])
 sbx = importlib.util.module_from_spec(spec)
+sys.modules["hermes_sbx_plugin"] = sbx
 spec.loader.exec_module(sbx)
 
 # A fake sbx that records calls and runs `exec` commands locally, so BaseEnvironment's real execute() path is exercised.
