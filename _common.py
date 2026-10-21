@@ -76,11 +76,13 @@ def find_sbx(command: Optional[str] = None) -> Optional[str]:
     return shutil.which(command or "sbx")
 
 
-def sandbox_name(task_id: str) -> str:
-    """Stable, sbx-name-safe name for a Hermes task id."""
+def sandbox_name(task_id: str, workspace: Optional[str] = None) -> str:
+    """Stable, sbx-name-safe name for a Hermes task id and, when one is mounted, its workspace: two profiles that
+    share a task id (Hermes collapses most of them to "default") but mount different directories must not share a VM."""
     raw = (task_id or "default").strip() or "default"
     safe = re.sub(r"[^a-z0-9-]+", "-", raw.lower()).strip("-")[:32].strip("-") or "task"
-    return f"hermes-{safe}-{hashlib.sha256(raw.encode()).hexdigest()[:8]}"
+    key = raw if not workspace else f"{raw}\0{workspace}"
+    return f"hermes-{safe}-{hashlib.sha256(key.encode()).hexdigest()[:8]}"
 
 
 def build_create_args(*, name: str, settings: Dict[str, Any], workspace: Optional[str]) -> List[str]:
@@ -126,7 +128,6 @@ class SbxSandbox:
         self._sbx = find_sbx(self._settings.get("command"))
         if not self._sbx:
             raise RuntimeError("the sbx CLI was not found on PATH (https://docs.docker.com/ai/sandboxes/install/)")
-        self.name = sandbox_name(task_id)
         self._persistent = persistent
         self._lock = threading.Lock()
         self._verified_at = 0.0
@@ -134,6 +135,7 @@ class SbxSandbox:
         # directory, and guessing a host path to mount would be unsafe.
         workspace = self._settings.get("workspace")
         self._workspace = os.path.abspath(workspace) if workspace else None
+        self.name = sandbox_name(task_id, self._workspace)
         # Hermes replaces host-looking cwds with a container default such as /root and passes it to execute() on the
         # first call; /root does not exist for the sandbox user, so that value means "use my tracked cwd".
         self._requested_cwd = cwd
