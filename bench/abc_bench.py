@@ -33,6 +33,7 @@ ap.add_argument("--home")
 ap.add_argument("--sandbox", help="B: existing sandbox name. A/C: ignored (the plugin names it)")
 ap.add_argument("--ssh-user", default="agent", help="B: user for <name>.sbx (sbx accepts agent, root, _default_user_)")
 ap.add_argument("--n", type=int, default=15, help="commands for the latency sample")
+ap.add_argument("--only", default="", help="comma list of step-number prefixes to run, e.g. 0_,1_,2_")
 ap.add_argument("--skip", default="", help="comma list of steps to skip: approvals,recreate,stopped,sync,failures")
 args = ap.parse_args()
 
@@ -41,6 +42,7 @@ WS = os.path.abspath(args.workspace)
 HOME = Path(args.home or tempfile.mkdtemp(prefix=f"hh-{SC}-"))
 TASK = f"bench-{SC}-{os.getpid()}"
 SKIP = set(filter(None, args.skip.split(",")))
+ONLY = tuple(filter(None, args.only.split(",")))
 
 
 def log(*a):
@@ -106,7 +108,7 @@ def short(r, n=700):
 
 def step(name):
     def deco(fn):
-        if name in SKIP:
+        if name in SKIP or (ONLY and not name.startswith(ONLY)):
             return fn
         log(f"== {name}")
         t0 = time.time()
@@ -127,6 +129,11 @@ def sbx(*a, timeout=120):
 
 def env_obj():
     return tt._active_environments.get(tt._resolve_container_task_id(TASK))
+
+
+def teardown():
+    """What Hermes does at session end: cleanup_vm on the key the environment is cached under."""
+    cleanup_vm(tt._resolve_container_task_id(TASK))
 
 
 def sandbox_name():
@@ -319,7 +326,7 @@ def _():
     before = marker_host.read_text()
     T("echo REMOTE-EDIT >> ~/.hermes/skills/bench-skill/SKILL.md; mkdir -p ~/.hermes/skills/from-guest; echo evil > ~/.hermes/skills/from-guest/SKILL.md") if SC != "A" else None
     t0 = time.time()
-    cleanup_vm(TASK)
+    teardown()
     dt = time.time() - t0
     after = marker_host.read_text()
     return {"cleanup_s": round(dt, 2), "sockets_before": socks_before,
@@ -372,9 +379,14 @@ def _():
 
 @step("14_final_cleanup")
 def _():
+    name = sandbox_name()
     t0 = time.time()
-    cleanup_vm(TASK)
-    return {"cleanup_s": round(time.time() - t0, 2), "sbx_ls": sbx("ls")[1][-300:]}
+    teardown()
+    dt = time.time() - t0
+    left = sbx("ls")[1][-300:]
+    if name:  # tidy up the sandbox this run used (A/C: the plugin's persistent sandbox; B: the --sandbox one)
+        sbx("rm", "--force", name)
+    return {"cleanup_s": round(dt, 2), "sbx_ls_before_rm": left}
 
 
 print(json.dumps(REPORT, indent=1, default=str))
