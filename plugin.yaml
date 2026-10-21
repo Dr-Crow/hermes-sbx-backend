@@ -1,5 +1,5 @@
 name: sbx
 version: 0.1.0
 description: Run Hermes terminal, file and execute_code tools inside Docker Sandboxes (sbx) microVMs
-author: openclaw-sbx-sandbox authors
+author: hermes-sbx-backend authors
 kind: backend

@@ -1,0 +1,53 @@
+version: 2.1
+
+# The plugin tests import Hermes, so they run against a pinned checkout of NousResearch/hermes-agent.
+# Matrix: the Hermes versions we have verified. Add a version here when it passes the bench.
+
+jobs:
+  unit:
+    docker:
+      - image: cimg/python:3.14
+    resource_class: medium
+    parameters:
+      hermes_tag:
+        type: string
+    steps:
+      - checkout
+      - run:
+          name: Install uv
+          command: pip install --user uv
+      - run:
+          name: Fetch Hermes << parameters.hermes_tag >> and install its locked dependencies
+          command: |
+            git clone --depth 1 --branch "<< parameters.hermes_tag >>" https://github.com/NousResearch/hermes-agent.git ~/hermes-agent
+            cd ~/hermes-agent
+            git rev-parse HEAD
+            ~/.local/bin/uv sync --frozen --no-python-downloads
+      - run:
+          name: Unit tests (fake sbx and ssh)
+          command: |
+            export PYTHONPATH="$HOME/hermes-agent"
+            ~/hermes-agent/.venv/bin/python -W ignore::ResourceWarning -m unittest discover -s tests -v
+
+  validate:
+    docker:
+      - image: cimg/python:3.14
+    steps:
+      - checkout
+      - run:
+          name: hermes plugins validate
+          command: |
+            PLUGIN_DIR="$(pwd)"
+            pip install --user uv
+            git clone --depth 1 --branch v0.22.2 https://github.com/NousResearch/hermes-agent.git ~/hermes-agent
+            cd ~/hermes-agent && ~/.local/bin/uv sync --frozen --no-python-downloads
+            ~/hermes-agent/.venv/bin/hermes plugins validate "$PLUGIN_DIR"
+
+workflows:
+  test:
+    jobs:
+      - unit:
+          matrix:
+            parameters:
+              hermes_tag: ["v0.22.0", "v0.22.2"]
+      - validate
